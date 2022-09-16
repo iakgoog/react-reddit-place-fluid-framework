@@ -1,12 +1,7 @@
-import { RecoilRoot } from 'recoil';
-import Place from './components/Place';
+import TableView from './components/Table';
 
 function App() {
-  return (
-    <RecoilRoot>
-      <Place/>
-    </RecoilRoot>
-  );
+  return <TableView />;
 }
 
 export default App;
