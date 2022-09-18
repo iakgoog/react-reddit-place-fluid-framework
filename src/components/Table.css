@@ -24,3 +24,12 @@ tfoot {
 tfoot th {
   font-weight: normal;
 }
+.p-2 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.p-2 table {
+  margin-top: 2rem;
+}

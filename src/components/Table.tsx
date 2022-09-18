@@ -24,7 +24,12 @@ declare module '@tanstack/react-table' {
   };
 }
 
-const client = new TinyliciousClient();
+const domain = 'https://app.iakgoog.link';
+const port = 443;
+
+const connectionConfig = { connection: { domain, port } };
+
+const client = new TinyliciousClient(connectionConfig);
 
 const containerSchema = {
   initialObjects: {
@@ -53,6 +58,12 @@ const getFluidData = async () => {
 
   const { initialObjects } = container;
 
+  if (initial) {
+    makeData(5).forEach((person: Person, index: number) => {
+      initialObjects.tiles.set(index.toString(), person);
+    });
+  }
+
   return {
     initialObjects,
     initial
@@ -67,16 +78,23 @@ const defaultColumn: Partial<ColumnDef<Person>> = {
     const [value, setValue] = React.useState(initialValue);
 
     // When the input is blurred, we'll call our table meta's updateData function
-    const onBlur = () => {
+    const onBlur = e => {
       table.options.meta?.updateData(index, id, value);
     };
+
+    // const onChange = () => {
+
+    // }
 
     // If the initialValue is changed external, sync it up with our state
     React.useEffect(() => {
       setValue(initialValue);
     }, [initialValue]);
 
-    return <input value={value as string} onChange={e => setValue(e.target.value)} onBlur={onBlur} />;
+    if (id === 'currency') {
+      return <strong>{value as string}</strong>;
+    }
+    return <input type="number" value={value as string} onChange={e => setValue(e.target.value)} onBlur={onBlur} />;
   }
 };
 
@@ -102,49 +120,23 @@ function TableView() {
   const columns = React.useMemo<ColumnDef<Person>[]>(
     () => [
       {
-        header: 'Name',
+        header: 'Trade',
         footer: props => props.column.id,
         columns: [
           {
-            accessorKey: 'firstName',
+            accessorKey: 'currency',
+            header: 'Currency',
             footer: props => props.column.id
           },
           {
-            accessorFn: row => row.lastName,
-            id: 'lastName',
-            header: () => <span>Last Name</span>,
-            footer: props => props.column.id
-          }
-        ]
-      },
-      {
-        header: 'Info',
-        footer: props => props.column.id,
-        columns: [
-          {
-            accessorKey: 'age',
-            header: () => 'Age',
+            accessorKey: 'bid',
+            header: 'Bid',
             footer: props => props.column.id
           },
           {
-            header: 'More Info',
-            columns: [
-              {
-                accessorKey: 'visits',
-                header: () => <span>Visits</span>,
-                footer: props => props.column.id
-              },
-              {
-                accessorKey: 'status',
-                header: 'Status',
-                footer: props => props.column.id
-              },
-              {
-                accessorKey: 'progress',
-                header: 'Profile Progress',
-                footer: props => props.column.id
-              }
-            ]
+            accessorKey: 'ask',
+            header: 'Ask',
+            footer: props => props.column.id
           }
         ]
       }
@@ -152,42 +144,64 @@ function TableView() {
     []
   );
 
-  const [data, setData] = React.useState(() => makeData(10));
-  const refreshData = () => setData(() => makeData(10));
+  // const [synchTiles, setSynchTiles] = React.useState<any | null>(null);
+  const [tiles, setTiles] = React.useState<any | null>(() => makeData(10));
+  const refreshData = () => setTiles(() => makeData(10));
   useEffect(() => {
     getFluidData().then(data => {
-      if (!data.initial) {
-        setData(data.initialObjects.tiles);
+      if (data) {
+        setTiles(data.initialObjects.tiles);
       }
     });
   }, []);
 
+  const [viewData, setViewData] = React.useState<any | null>([]);
+  React.useEffect(() => {
+    if (tiles instanceof SharedMap) {
+      // Sync Fluid data into view state
+
+      const syncView = (newTiles?: any) => {
+        const tempSync = [];
+        tiles.forEach((item, index) => (tempSync[index] = item));
+        setViewData(tempSync);
+      };
+      // const syncView = () => {
+      //   console.log('YES');
+      // };
+      // Ensure sync runs at least once
+      syncView();
+      // Update state each time our map changes
+      tiles.on('valueChanged', syncView);
+      // Turn off SharedMap listener when component is unmounted
+      return () => {
+        tiles.off('valueChanged', syncView);
+      };
+    }
+  }, [tiles]);
+
   const [autoResetPageIndex, skipAutoResetPageIndex] = useSkipper();
 
   const table = useReactTable({
-    data,
+    data: viewData,
     columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    // getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     autoResetPageIndex,
     // Provide our updateData function to our table meta
     meta: {
       updateData: (rowIndex, columnId, value) => {
         // Skip age index reset until after next rerender
-        skipAutoResetPageIndex();
-        setData(old =>
-          old.map((row, index) => {
-            if (index === rowIndex) {
-              return {
-                ...old[rowIndex]!,
-                [columnId]: value
-              };
-            }
-            return row;
-          })
-        );
+        // skipAutoResetPageIndex();
+
+        const getRow = tiles.get(rowIndex.toString());
+        if (getRow) {
+          tiles.set(rowIndex, {
+            ...viewData[rowIndex.toString()],
+            [columnId]: parseInt(value, 10)
+          });
+        }
       }
     },
     debugTable: true
@@ -206,11 +220,11 @@ function TableView() {
                     {header.isPlaceholder ? null : (
                       <div>
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanFilter() ? (
+                        {/* {header.column.getCanFilter() ? (
                           <div>
                             <Filter column={header.column} table={table} />
                           </div>
-                        ) : null}
+                        ) : null} */}
                       </div>
                     )}
                   </th>
@@ -232,7 +246,7 @@ function TableView() {
         </tbody>
       </table>
       <div className="h-2" />
-      <div className="flex items-center gap-2">
+      {/* <div className="flex items-center gap-2">
         <button
           className="border rounded p-1"
           onClick={() => table.setPageIndex(0)}
@@ -287,14 +301,14 @@ function TableView() {
             </option>
           ))}
         </select>
-      </div>
-      <div>{table.getRowModel().rows.length} Rows</div>
-      <div>
+      </div> */}
+      {/* <div>{table.getRowModel().rows.length} Rows</div> */}
+      {/* <div>
         <button onClick={() => rerender()}>Force Rerender</button>
       </div>
       <div>
         <button onClick={() => refreshData()}>Refresh Data</button>
-      </div>
+      </div> */}
     </div>
   );
 }

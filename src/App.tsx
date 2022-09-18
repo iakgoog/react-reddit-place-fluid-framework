@@ -1,7 +1,7 @@
-import TableView from './components/Table';
+import Table from './components/Table';
 
 function App() {
-  return <TableView />;
+  return <Table />;
 }
 
 export default App;
